@@ -1,0 +1,19 @@
+#left {
+  float: left; 
+  width: 30%;
+}
+
+#middle {
+  float: left;
+  width: 40%;
+}
+
+#right {
+  float: left;
+  width: 30%;
+}
+
+#footer {
+  position: fixed;
+  bottom: 0;
+}
