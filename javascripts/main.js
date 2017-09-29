@@ -160,42 +160,32 @@ Timer.prototype.showDate = function() {
     return 'Day ' + this.day() + ' of Year ' + this.year();
 }
 
-function Player(healthMax, health, drunk, age, gold, inventory, skillWork, xpIncrement, goldPerQuest, healthPerLevel, xp, caffeine, bladder, sleeping) {
-    this.healthMax = healthMax;
-    this.health = health;
-    this.drunk = drunk;
-    this.age = age;
+function Player(vitals, gold, inventory, skills) {
     this.gold = gold;
+    this.vitals = vitals;
     this.inventory = inventory;
-    this.skillWork = skillWork;
-    this.xpIncrement = xpIncrement;
-    this.goldPerQuest = goldPerQuest;
-    this.healthPerLevel = healthPerLevel;
-    this.xp = xp;
-    this.caffeine = caffeine;
-    this.bladder = bladder;
-    this.sleeping = sleeping;
+    this.skills = skills;
 }
 
 Player.prototype.haveABirthday = function() {
     yourDiary.addEntry('Happy Birthday!');
     this.addXp(10);
-    this.age += 1;
+    this.vitals.age += 1;
     timer.addEvent('Birthday', SECONDS_IN_YEAR, function() {you.haveABirthday();});
 }
 
 Player.prototype.isAlive = function() {
-    return (this.health >= 0)
+    return (this.vitals.health >= 0)
 }
 
 Player.prototype.adjHealth = function(amount){
-    this.health += amount;
-    if (this.health > this.healthMax) { this.health = this.healthMax; }
+    this.vitals.health += amount;
+    if (this.vitals.health > this.vitals.healthMax) { this.vitals.health = this.vitals.healthMax; }
     if (!this.isAlive()) { this.death(); }
 }
 
 Player.prototype.addXp = function(amount) {
-    this.xp += amount;
+    this.skills.xp += amount;
 }
 
 Player.prototype.death = function() {
@@ -205,23 +195,18 @@ Player.prototype.death = function() {
 
 Player.prototype.nextLevel = function() {
     if (this.isAlive()) {
-        this.xp -= this.xpIncrement;
-        this.healthMax += 1;
-        this.adjHealth(this.healthPerLevel);
-        this.goldPerQuest *= 2;
-        yourDiary.addEntry('Level UP! ');
+        var raise = Math.round(Math.log(this.skills.xp));
+        this.vitals.healthMax += raise;
+        this.adjHealth(this.vitals.healthMax);
+        yourDiary.addEntry('Level UP! Max Health increases by ' + raise + ' and full heal!');
     }
 }
 
 function Container(contents) {
     this.contents = contents;
-//    this.contents2 = [];
 }
 
 Container.prototype.show = function() {
-//    this.contents2 = [];
-//    var b = this.contents2;
-//    this.contents.forEach(function (a) {console.log(a.describe())})
     var hist = {};
     var result = '';
     var key = '';
@@ -230,7 +215,6 @@ Container.prototype.show = function() {
         result += '<br />' + (hist[key]==1?'a':hist[key]) + ' ' + key + ', ';
     }
     return result.slice(0,-2);
-
 }
 
 function Diary(contents) {
@@ -257,9 +241,7 @@ function Stat(id, prefix, suffix, valueFunction) {
     mySpan.id=id;
     mySpan.innerHTML = this.text;
 
-    //document.getElementById("top_left").appendChild(document.createElement('br'));
     document.getElementById("top_left2").appendChild(mySpan);
-    //document.getElementById(id).innerHTML = valueFunction;
 }
 
 Stat.prototype.toString = function() {
@@ -272,11 +254,14 @@ Stat.prototype.update = function() {
 
 function clickQuest() {
     if (you.isAlive()) {
-        you.gold += you.goldPerQuest;
+        var pay = Math.round(Math.log(you.skills.xp + 1) + 1);
+        you.gold += pay;
         you.adjHealth(-10);
         you.addXp(1);
         you.job = false;
-        you.inventory.unshift(new Weapon().describe());
+        var treasure = new Weapon().describe();
+        you.inventory.unshift(treasure);
+        yourDiary.addEntry('You complete your quest, finding ' + pay + ' gold nugs and the ' + treasure + '.');
         tickTock(SECONDS_IN_DAY);
     }
     else {
@@ -285,17 +270,17 @@ function clickQuest() {
 }
 
 function clickJob() {
-    if (you.isAlive() && you.drunk < 1) {
-            var pay = Math.round(Math.log(you.skillWork + 1) + 1)
+    if (you.isAlive() && you.vitals.drunk < 1) {
+            var pay = Math.round(Math.log(you.skills.working + 1) + 1);
             yourDiary.addEntry('You find some work and earn ' + pay + ' gold coins.');
             you.gold += pay;
-            you.skillWork += 8;
+            you.skills.working += 8;
             tickTock(8 * SECONDS_IN_HOUR);
     }
     else if (!you.isAlive()) {
-      yourDiary.addEntry('You are too dead to go to work.')
+      yourDiary.addEntry('You are too dead to go to work.');
     }
-    else if (you.drunk >= 1) {
+    else if (you.vitals.drunk >= 1) {
       yourDiary.addEntry('You are too drunk to work.');
     }
 }
@@ -306,8 +291,8 @@ function clickDrink() {
             you.gold -= 2;
             you.adjHealth(2);
             you.job = false;
-            you.drunk += 4500;
-            you.bladder += 12;
+            you.vitals.drunk += 4500;
+            you.vitals.bladder += 12;
             yourDiary.addEntry('You buy and drink a beer!');
             document.getElementById('job').innerHTML = 'Drunk';
         }
@@ -319,8 +304,8 @@ function clickCoffee() {
         if (you.gold >= 1) {
             you.gold -= 1;
             yourDiary.addEntry('You drink some coffee. You feel pumped up!');
-            you.caffeine += 100;
-            you.bladder += 5;
+            you.vitals.caffeine += 100;
+            you.vitals.bladder += 5;
             you.adjHealth(1);
         }
     }
@@ -328,22 +313,22 @@ function clickCoffee() {
 
 function clickSleep() {
     if (you.isAlive()) {
-        if (you.sleeping) {
-            clickWake()
+        if (you.vitals.sleeping) {
+            clickWake();
         }
         else {
-            you.sleeping = true;
+            you.vitals.sleeping = true;
             document.getElementById('sleep').innerHTML = 'Wake up';
             yourDiary.addEntry('You go to sleep!');
-            timer.addEvent('Wake', SECONDS_IN_HOUR * 8, function () { clickWake() })
+            timer.addEvent('Wake', SECONDS_IN_HOUR * 8, function () { clickWake() });
         }
     }
 }
 
 function clickWake() {
     if (you.isAlive()) {
-        if (you.sleeping) {
-            you.sleeping = false;
+        if (you.vitals.sleeping) {
+            you.vitals.sleeping = false;
             document.getElementById('sleep').innerHTML = 'Sleep';
             yourDiary.addEntry('You wake up refreshed');
         }
@@ -356,14 +341,15 @@ function clickWield() {
 }
 
 function clickPiss() {
-    you.bladder = 0;
+    you.vitals.bladder = 0;
 }
 
 function clickSave() {
     var save = {
         you : you,
         yourDiary : yourDiary,
-        timer : timer
+        timer : timer,
+        xpIncrement : xpIncrement
     }
     localStorage.setItem('save',JSON.stringify(save));
     console.log('game saved');
@@ -371,14 +357,12 @@ function clickSave() {
 
 function clickLoad() {
     var savegame = JSON.parse(localStorage.getItem('save'));
-    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.healthMax, savegame.you.health,
-      savegame.you.drunk, savegame.you.age, savegame.you.gold, savegame.you.inventory, savegame.you.skillWork,
-      savegame.you.xpIncrement, savegame.you.goldPerQuest, savegame.you.healthPerLevel, savegame.you.xp,
-      savegame.you.caffeine, savegame.you.bladder, savegame.you.sleeping);
+    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.vitals, savegame.you.gold, savegame.you.inventory, savegame.you.skills);
     yourBag = new Container(you.inventory);
+    xpIncrement = savegame.xpIncrement;
     if (typeof savegame.yourDiary !== 'undefined') yourDiary.contents =  savegame.yourDiary.contents; //new Diary(savegame.yourDiary.contents);
     if (typeof savegame.timer !== 'undefined') timer.ticks = savegame.timer.ticks;
-    if (you.drunk <= 1)
+    if (you.vitals.drunk <= 1)
         { document.getElementById('job').innerHTML = 'Day Labor'; }
     else
         { document.getElementById('job').innerHTML = 'Drunk'; }
@@ -392,8 +376,8 @@ function autoSave() {
     clickSave();
     timer.addEvent('Save', SECONDS_IN_DAY * 7, function () { autoSave(); });
 }
-var you = new Player(60, 60, 0, 18, 0, ['rags', 'stick', 'rock'], 0, 10, 1, 10, 0, 0, 0, false);
-//var you = new Player( {healthMax: 60, health: 60, drunk: 0, age: 18, gold: 0, inventory: ['loincloth'], skillWork: 0, xpIncrement: 10, goldPerQuest: 1, healthPerLevel: 10, xp: 0, caffeine: 0} );
+var you = new Player({healthMax: 60, health: 60, bladder: 0, age: 18, caffeine: 0, drunk: 0, sleeping: false}, 0, ['rags', 'stick', 'rock'], {working: 0, xp: 0});
+var xpIncrement = 10;
 var yourDiary = new Diary(['You are alive. ']);
 var timer = new Timer(0, 666, []);
 
@@ -416,14 +400,14 @@ new Button('top_left2', 'speed_fast', 'Fast', true, function () { timer.speed = 
 var stats = [];
 stats.unshift(new Stat('time', '<br/>Time: ', ' on ', function() {return timer.showTime(); } ));
 stats.unshift(new Stat('date', 'Date: ', '<br/>', function() { return timer.showDate(); } ));
-stats.unshift(new Stat('bladder', '<br/>Bladder: ', '% full<br/>', function() { return you.bladder; } ));
-stats.unshift(new Stat('health', 'Health: ', '/', function() { return you.health.toFixed(1); } ));
-stats.unshift(new Stat('healthMax', '', '<br/>', function() { return you.healthMax; } ));
-stats.unshift(new Stat('caffeine', 'Caffeine: ', ' mg<br/>', function() { return you.caffeine.toFixed(1) ; } ));
-stats.unshift(new Stat('skillWork', 'Work Skill: ', '<br/>', function () { return you.skillWork.toFixed(1); } ));
+stats.unshift(new Stat('bladder', '<br/>Bladder: ', '% full<br/>', function() { return you.vitals.bladder; } ));
+stats.unshift(new Stat('health', 'Health: ', '/', function() { return you.vitals.health.toFixed(1); } ));
+stats.unshift(new Stat('healthMax', '', '<br/>', function() { return you.vitals.healthMax; } ));
+stats.unshift(new Stat('caffeine', 'Caffeine: ', ' mg<br/>', function() { return you.vitals.caffeine.toFixed(1) ; } ));
+stats.unshift(new Stat('skillWork', 'Work Skill: ', '<br/>', function () { return you.skills.working.toFixed(1); } ));
 stats.unshift(new Stat('gold', 'Gold: ', '<br/>', function () { return you.gold.toFixed(0); } ));
-stats.unshift(new Stat('xp', 'XP: ', '<br/>', function() { return you.xp; } ));
-stats.unshift(new Stat('age', 'Age: ', '<br/>', function() { return you.age; }));
+stats.unshift(new Stat('xp', 'XP: ', '<br/>', function() { return you.skills.xp; } ));
+stats.unshift(new Stat('age', 'Age: ', '<br/>', function() { return you.vitals.age; }));
 stats.unshift(new Stat('weapon', 'Weapon: ', '<br/>', function() { } ));
 
 var yourBag = new Container(you.inventory);
@@ -431,31 +415,32 @@ var yourBag = new Container(you.inventory);
 function tickTock(number) {
     timer.passes(number);
     if (you.isAlive()) {
-        if (you.sleeping) {
+        if (you.vitals.sleeping) {
             you.adjHealth(8*number/(SECONDS_IN_DAY));
         }
         else {
             you.adjHealth(4*number/(SECONDS_IN_DAY));
         }
-        if (you.caffeine >= 0.1) {
-            you.caffeine = you.caffeine * Math.pow(0.5, (number/(5*SECONDS_IN_HOUR)));
+        if (you.vitals.caffeine >= 0.1) {
+            you.vitals.caffeine = you.vitals.caffeine * Math.pow(0.5, (number/(5*SECONDS_IN_HOUR)));
         }
         else {
-            you.caffeine = 0;
+            you.vitals.caffeine = 0;
         }
-        if (you.xp > you.xpIncrement) {
+        if (you.skills.xp > xpIncrement) {
             you.nextLevel();
+            xpIncrement *= 2;
         }
-        if (you.drunk <= 1) {
+        if (you.vitals.drunk <= 1) {
             document.getElementById('job').innerHTML = 'Day Labor';
         }
-        if (you.drunk > 0) {
-            you.drunk -= number;
-            if (you.drunk < 0) you.drunk = 0;
+        if (you.vitals.drunk > 0) {
+            you.vitals.drunk -= number;
+            if (you.vitals.drunk < 0) you.vitals.drunk = 0;
         }
-        if (you.bladder >= 100) {
+        if (you.vitals.bladder >= 100) {
             yourDiary.addEntry('You pee your pants.');
-            you.bladder = 0;
+            you.vitals.bladder = 0;
         }
     }
 
