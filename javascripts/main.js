@@ -160,7 +160,7 @@ Timer.prototype.showDate = function() {
     return 'Day ' + this.day() + ' of Year ' + this.year();
 }
 
-function Player(healthMax, health, drunk, age, gold, inventory, skillWork, xpIncrement, goldPerQuest, healthPerLevel, xp, caffeine) {
+function Player(healthMax, health, drunk, age, gold, inventory, skillWork, xpIncrement, goldPerQuest, healthPerLevel, xp, caffeine, bladder, sleeping) {
     this.healthMax = healthMax;
     this.health = health;
     this.drunk = drunk;
@@ -173,7 +173,8 @@ function Player(healthMax, health, drunk, age, gold, inventory, skillWork, xpInc
     this.healthPerLevel = healthPerLevel;
     this.xp = xp;
     this.caffeine = caffeine;
-    this.bladder = 0;
+    this.bladder = bladder;
+    this.sleeping = sleeping;
 }
 
 Player.prototype.haveABirthday = function() {
@@ -327,9 +328,25 @@ function clickCoffee() {
 
 function clickSleep() {
     if (you.isAlive()) {
-        tickTock(8 * SECONDS_IN_HOUR);
-        yourDiary.addEntry('You get a good night sleep!');
-        you.adjHealth(2);
+        if (you.sleeping) {
+            clickWake()
+        }
+        else {
+            you.sleeping = true;
+            document.getElementById('sleep').innerHTML = 'Wake up';
+            yourDiary.addEntry('You go to sleep!');
+            timer.addEvent('Wake', SECONDS_IN_HOUR * 8, function () { clickWake() })
+        }
+    }
+}
+
+function clickWake() {
+    if (you.isAlive()) {
+        if (you.sleeping) {
+            you.sleeping = false;
+            document.getElementById('sleep').innerHTML = 'Sleep';
+            yourDiary.addEntry('You wake up refreshed');
+        }
     }
 }
 
@@ -348,14 +365,16 @@ function clickSave() {
         yourDiary : yourDiary,
         timer : timer
     }
-
     localStorage.setItem('save',JSON.stringify(save));
     console.log('game saved');
 }
 
 function clickLoad() {
     var savegame = JSON.parse(localStorage.getItem('save'));
-    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.healthMax, savegame.you.health, savegame.you.drunk, savegame.you.age, savegame.you.gold, savegame.you.inventory, savegame.you.skillWork, savegame.you.xpIncrement, savegame.you.goldPerQuest, savegame.you.healthPerLevel, savegame.you.xp, savegame.you.caffeine);
+    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.healthMax, savegame.you.health,
+      savegame.you.drunk, savegame.you.age, savegame.you.gold, savegame.you.inventory, savegame.you.skillWork,
+      savegame.you.xpIncrement, savegame.you.goldPerQuest, savegame.you.healthPerLevel, savegame.you.xp,
+      savegame.you.caffeine, savegame.you.bladder, savegame.you.sleeping);
     yourBag = new Container(you.inventory);
     if (typeof savegame.yourDiary !== 'undefined') yourDiary.contents =  savegame.yourDiary.contents; //new Diary(savegame.yourDiary.contents);
     if (typeof savegame.timer !== 'undefined') timer.ticks = savegame.timer.ticks;
@@ -373,7 +392,7 @@ function autoSave() {
     clickSave();
     timer.addEvent('Save', SECONDS_IN_DAY * 7, function () { autoSave(); });
 }
-var you = new Player(60, 60, 0, 18, 0, ['rags', 'stick', 'rock'], 0, 10, 1, 10, 0, 0);
+var you = new Player(60, 60, 0, 18, 0, ['rags', 'stick', 'rock'], 0, 10, 1, 10, 0, 0, 0, false);
 //var you = new Player( {healthMax: 60, health: 60, drunk: 0, age: 18, gold: 0, inventory: ['loincloth'], skillWork: 0, xpIncrement: 10, goldPerQuest: 1, healthPerLevel: 10, xp: 0, caffeine: 0} );
 var yourDiary = new Diary(['You are alive. ']);
 var timer = new Timer(0, 666, []);
@@ -412,7 +431,12 @@ var yourBag = new Container(you.inventory);
 function tickTock(number) {
     timer.passes(number);
     if (you.isAlive()) {
-        you.adjHealth(4*number/(SECONDS_IN_DAY));
+        if (you.sleeping) {
+            you.adjHealth(8*number/(SECONDS_IN_DAY));
+        }
+        else {
+            you.adjHealth(4*number/(SECONDS_IN_DAY));
+        }
         if (you.caffeine >= 0.1) {
             you.caffeine = you.caffeine * Math.pow(0.5, (number/(5*SECONDS_IN_HOUR)));
         }
