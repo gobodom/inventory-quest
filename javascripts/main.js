@@ -110,6 +110,14 @@ Weapon.prototype.describe = function() {
     return this.condition + ', ' + this.qualityAdj + (this.qualityAdj == '' ? '' : ', ') + this.material + ' ' + this.kind + ' of ' + this.modifier;
 }
 
+function Item() {
+    this.description = "Treasure"
+}
+
+Item.prototype.describe = function() {
+    return this.description;
+}
+
 function Player(vitals, gold, skills) {
     this.gold = gold;
     this.vitals = vitals;
@@ -256,24 +264,46 @@ function Container(contents) {
 }
 
 Container.prototype.deposit = function(item) {
-    this.contents.push(item);
+    var key = item.describe();
+    var hist = this.contents;
+    if (key in hist) hist[key] ++;
+    else hist[key] = 1;
+    this.contents = hist;
 }
 
 Container.prototype.show = function() {
-    var hist = {};
+    var hist = this.contents;
     var result = '';
     var key = '';
-    this.contents.forEach(function (a) {if (a.describe() in hist) hist[a] ++; else hist[a.describe()] = 1; } );
+    document.getElementById('inventory').innerHTML = '';
     for(key in hist) {
-        result += '<div id=\'' + key + hist[key] + '\'>' + (hist[key]==1?'a':hist[key]) + ' ' + key + '</div>';
+        var item_id = key;
+        var button_id = item_id;
+        var div = document.createElement('div');
+        div.id = item_id;
+        div.innerHTML = (hist[key]==1?'a':hist[key]) + ' ' + key;
+        document.getElementById('inventory').appendChild(div);
+        var button_fun = function(key) {yourBag.drop(key);}
+        var button = new Button(item_id, button_id, 'drop', true, button_fun, true);
     }
-    return result;
 }
 
 Container.prototype.list = function() {
     var result = [];
     this.contents.forEach(function (a) {result.unshift(a.describe())} )
     return result;
+}
+
+Container.prototype.drop = function(item_id) {
+    var key = item_id.target.id;
+    console.log(item_id);
+    var hist = this.contents;
+    if (key in hist) {
+        hist[key]--;
+        if (hist[key]===0) delete hist[key];
+        yourDiary.addEntry('you drop the ' + key);
+    }
+    this.contents = hist;
 }
 
 function Diary(contents) {
@@ -391,7 +421,8 @@ function clickLoad() {
     var savegame = JSON.parse(localStorage.getItem('save'));
     if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.vitals, savegame.you.gold, savegame.you.skills);
     if (typeof savegame.yourBag !== 'undefined') {
-        yourBag = new Container([]);
+        yourBag = new Container({});
+        //TODO: rewrite using forEach?
         for (var each in savegame.yourBag.contents) {
             var item = savegame.yourBag.contents[each];
             yourBag.deposit(new Weapon(item.condition, item.quality, item.material, item.kind, item.modifier));
@@ -455,13 +486,13 @@ stats.unshift(new Stat('xp', 'XP: ', '<br/>', function() { return you.skills.xp;
 stats.unshift(new Stat('age', 'Age: ', '<br/>', function() { return you.vitals.age; }));
 stats.unshift(new Stat('weapon', 'Weapon: ', '<br/>', function() { } ));
 
-var yourBag = new Container([]);
+var yourBag = new Container({});
 
 function tickTock(number) {
     timer.passes(number);
     you.checkSelf(number);
 
-    document.getElementById('inventory').innerHTML = yourBag.show();
+    yourBag.show();
     document.getElementById('diary').innerHTML = yourDiary.show();
     stats.forEach(function (a) {a.update();});
     buttons.forEach(function (a) {if (a.activeCondition()) a.activate(); else a.deactivate();})
