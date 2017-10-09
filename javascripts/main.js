@@ -1,12 +1,5 @@
 'use strict';
 
-var DAYS_IN_YEAR = 360;
-var HOURS_IN_DAY = 24;
-var MINUTES_IN_HOUR = 60;
-var SECONDS_IN_MINUTE = 60;
-var SECONDS_IN_HOUR = MINUTES_IN_HOUR * SECONDS_IN_MINUTE;
-var SECONDS_IN_DAY = HOURS_IN_DAY * SECONDS_IN_HOUR;
-var SECONDS_IN_YEAR = DAYS_IN_YEAR * SECONDS_IN_DAY;
 var weapon = {};
 
 function getRandomInt(min, max) {
@@ -39,18 +32,28 @@ function makeATreasure() {
             else return pickOne(itemAdj) + ' ' + pickOne(itemList);
 }
 
-function Button(parent, id, text, active, action) {
-    var myButton = document.createElement('button');
-    myButton.innerHTML = text;
-    myButton.id = id;
-    myButton.type = 'button';
+function Button(parent, id, text, active, action, activeCondition) {
+    this.myButton = document.createElement('button');
+    this.myButton.innerHTML = text;
+    this.myButton.id = id;
+    this.myButton.type = 'button';
+    this.parent = parent;
+    this.activeCondition = activeCondition;
 
-    document.getElementById(parent).appendChild(myButton);
+    document.getElementById(parent).appendChild(this.myButton);
     //document.getElementById(parent).appendChild(document.createElement('br'));
 
     if (active) {
-        myButton.addEventListener('click', action);
+        this.myButton.addEventListener('click', action);
     }
+}
+
+Button.prototype.deactivate = function() {
+    document.getElementById(this.myButton.id).disabled = true;
+}
+
+Button.prototype.activate = function() {
+    document.getElementById(this.myButton.id).disabled = false;
 }
 
 function Weapon(condition, quality, material, kind, modifier) {
@@ -107,63 +110,9 @@ Weapon.prototype.describe = function() {
     return this.condition + ', ' + this.qualityAdj + (this.qualityAdj == '' ? '' : ', ') + this.material + ' ' + this.kind + ' of ' + this.modifier;
 }
 
-function Timer(ticks, startYear, eventList) {
-    this.ticks = ticks;
-    this.startYear = startYear;
-    this.eventList = eventList;
-    this.speed = 1;
-}
-
-Timer.prototype.year = function() {
-    return Math.floor(this.ticks / SECONDS_IN_YEAR ) + this.startYear;
-}
-
-Timer.prototype.day = function() {
-    return Math.floor(this.ticks / SECONDS_IN_DAY) % DAYS_IN_YEAR + 1;
-}
-
-Timer.prototype.hour = function() {
-    return (this.ticks / SECONDS_IN_HOUR).toFixed() % HOURS_IN_DAY;
-}
-
-Timer.prototype.minute = function() {
-    return (this.ticks / SECONDS_IN_MINUTE).toFixed() % MINUTES_IN_HOUR;
-}
-
-Timer.prototype.second = function() {
-    return (this.ticks % SECONDS_IN_MINUTE);
-}
-
-Timer.prototype.passes = function(amount) {
-    this.ticks += amount;
-    var now = this.ticks;
-    for (var i = this.eventList.length - 1; i >= 0; i--) {
-        if (now >= this.eventList[i][1]) {
-            this.eventList[i][2]();
-            this.eventList.splice(i,1);
-        }
-    };
-}
-
-Timer.prototype.addEvent = function(name, ticks, call) {
-    this.eventList.push([name, this.ticks+ticks, call]);
-}
-
-Timer.prototype.showTime = function() {
-    function pad(num) {
-        return ("0"+num).slice(-2);
-    }
-    return pad(this.hour()) + ':' + pad(this.minute()) + '.' + pad(this.second());
-}
-
-Timer.prototype.showDate = function() {
-    return 'Day ' + this.day() + ' of Year ' + this.year();
-}
-
-function Player(vitals, gold, inventory, skills) {
+function Player(vitals, gold, skills) {
     this.gold = gold;
     this.vitals = vitals;
-    this.inventory = inventory;
     this.skills = skills;
 }
 
@@ -175,7 +124,11 @@ Player.prototype.haveABirthday = function() {
 }
 
 Player.prototype.isAlive = function() {
-    return (this.vitals.health >= 0)
+    return (you.vitals.health >= 0);
+}
+
+Player.prototype.isAwake = function() {
+    return (you.vitals.cognizance === 'awake');
 }
 
 Player.prototype.adjHealth = function(amount){
@@ -189,8 +142,10 @@ Player.prototype.addXp = function(amount) {
 }
 
 Player.prototype.death = function() {
-    document.getElementById('quest').innerHTML = 'Dead';
-    yourDiary.addEntry('You are dead. ')
+    you.vitals.cognizance = 'dead';
+    you.checkBladder();
+    yourDiary.addEntry('You have died. Refresh page to start over, or press load to load from last save.')
+    questButton.deactivate();
 }
 
 Player.prototype.nextLevel = function() {
@@ -202,19 +157,123 @@ Player.prototype.nextLevel = function() {
     }
 }
 
+Player.prototype.piss = function() {
+    if (you.vitals.bladder > 0) {
+        you.vitals.bladder = 0;
+        if (you.isAlive()) {
+            if (you.isAwake()) yourDiary.addEntry('You take a piss.')
+            else yourDiary.addEntry('You wet the bed.');
+        }
+    }
+    else yourDiary.addEntry('You don\'t need to go right now.')
+}
+
+Player.prototype.sleep = function () {
+    if (you.isAlive()) {
+        if (you.vitals.cognizance === 'asleep') {
+            you.wakeUp();
+        }
+        else {
+            you.vitals.cognizance = 'asleep';
+            document.getElementById('sleep').innerHTML = 'Wake up';
+            questButton.deactivate();
+            yourDiary.addEntry('You go to sleep!');
+            timer.addEvent('Wake', SECONDS_IN_HOUR * 8, function () { you.wakeUp() });
+        }
+    }
+}
+
+Player.prototype.wakeUp = function () {
+    if (you.isAlive()) {
+        if (you.vitals.cognizance === 'asleep') {
+            you.vitals.cognizance = 'awake';
+            document.getElementById('sleep').innerHTML = 'Sleep';
+            questButton.activate();
+            yourDiary.addEntry('You wake up refreshed');
+        }
+    }
+}
+
+Player.prototype.checkBladder = function() {
+    var awake = you.vitals.cognizance === 'awake';
+    var asleep = you.vitals.cognizance === 'asleep';
+    var dead = you.vitals.cognizance === 'dead';
+    var drunk = you.vitals.drunk > 4500;
+    if (awake && !drunk && you.vitals.bladder > 100) {
+        yourDiary.addEntry('You wet your pants.');
+        you.vitals.bladder = 0;
+    }
+    else if (awake && drunk && you.vitals.bladder > 90) {
+        yourDiary.addEntry('You drunkenly piss yourself.');
+        you.vitals.bladder = 0;
+    }
+    else if (asleep && !drunk && you.vitals.bladder > 95) {
+        yourDiary.addEntry('You wake up wetting the bed.');
+        you.vitals.bladder = 0;
+        you.wakeUp();
+    }
+    else if (asleep && drunk && you.vitals.bladder > 85) {
+        yourDiary.addEntry('You piss the bed while passed out drunk.');
+        you.vitals.bladder = 0;
+    }
+    else if (dead) {
+        yourDiary.addEntry('You void your loins, as the dead are wont to do.');
+        you.vitals.bladder = 0;
+    }
+}
+
+Player.prototype.checkSelf = function(number) {
+    if (you.isAlive()) {
+        if (you.vitals.cognizance === 'asleep') {
+            you.adjHealth(8*number/(SECONDS_IN_DAY));
+        }
+        else {
+            you.adjHealth(4*number/(SECONDS_IN_DAY));
+        }
+        if (you.vitals.caffeine >= 0.1) {
+            you.vitals.caffeine = you.vitals.caffeine * Math.pow(0.5, (number/(5*SECONDS_IN_HOUR)));
+        }
+        else {
+            you.vitals.caffeine = 0;
+        }
+        if (you.skills.xp > xpIncrement) {
+            you.nextLevel();
+            xpIncrement *= 2;
+        }
+        if (you.vitals.drunk <= 1) {
+            document.getElementById('job').innerHTML = 'Day Labor';
+        }
+        if (you.vitals.drunk > 0) {
+            you.vitals.drunk -= number;
+            if (you.vitals.drunk < 0) you.vitals.drunk = 0;
+        }
+        you.checkBladder();
+    }
+}
+
 function Container(contents) {
     this.contents = contents;
+}
+
+Container.prototype.deposit = function(item) {
+    this.contents.unshift(item);
 }
 
 Container.prototype.show = function() {
     var hist = {};
     var result = '';
     var key = '';
-    this.contents.forEach(function (a) {if (a in hist) hist[a] ++; else hist[a] = 1; } );
+    this.contents.forEach(function (a) {if (a.describe() in hist) hist[a] ++; else hist[a.describe()] = 1; } );
     for(key in hist) {
-        result += '<br />' + (hist[key]==1?'a':hist[key]) + ' ' + key + ', ';
+        result += '<div id=\'' + key + hist[key] + '\'>' + (hist[key]==1?'a':hist[key]) + ' ' + key + '</div>';
     }
-    return result.slice(0,-2);
+    return result;
+}
+
+Container.prototype.list = function() {
+    var result = [];
+    this.contents.forEach(function (a) {result.unshift(a.describe())} )
+    return result;
 }
 
 function Diary(contents) {
@@ -253,31 +312,36 @@ Stat.prototype.update = function() {
 }
 
 function clickQuest() {
-    if (you.isAlive()) {
+    if (you.vitals.cognizance === 'awake') {
         var pay = Math.round(Math.log(you.skills.xp + 1) + 1);
         you.gold += pay;
         you.adjHealth(-10);
         you.addXp(1);
         you.job = false;
-        var treasure = new Weapon().describe();
-        you.inventory.unshift(treasure);
-        yourDiary.addEntry('You complete your quest, finding ' + pay + ' gold nugs and the ' + treasure + '.');
+        if (you.isAlive()) {
+            var treasure = new Weapon();
+            yourBag.deposit(treasure);
+            yourDiary.addEntry('You complete your quest, finding ' + pay + ' gold nugs and the ' + treasure.describe() + '.');
+        }
         tickTock(SECONDS_IN_DAY);
     }
-    else {
-      yourDiary.addEntry('You are too dead to go on a quest.');
+    else if (you.vitals.cognizance === 'asleep') {
+        yourDiary.addEntry('You are sleeping.')
+    }
+    else if (you.vitals.cognizance === 'dead') {
+        yourDiary.addEntry('You are too dead to go on a quest.');
     }
 }
 
 function clickJob() {
-    if (you.isAlive() && you.vitals.drunk < 1) {
+    if (you.vitals.cognizance === 'awake' && you.vitals.drunk < 1) {
             var pay = Math.round(Math.log(you.skills.working + 1) + 1);
             yourDiary.addEntry('You find some work and earn ' + pay + ' gold coins.');
             you.gold += pay;
             you.skills.working += 8;
             tickTock(8 * SECONDS_IN_HOUR);
     }
-    else if (!you.isAlive()) {
+    else if (you.vitals.cognizance === 'dead') {
       yourDiary.addEntry('You are too dead to go to work.');
     }
     else if (you.vitals.drunk >= 1) {
@@ -311,45 +375,13 @@ function clickCoffee() {
     }
 }
 
-function clickSleep() {
-    if (you.isAlive()) {
-        if (you.vitals.sleeping) {
-            clickWake();
-        }
-        else {
-            you.vitals.sleeping = true;
-            document.getElementById('sleep').innerHTML = 'Wake up';
-            yourDiary.addEntry('You go to sleep!');
-            timer.addEvent('Wake', SECONDS_IN_HOUR * 8, function () { clickWake() });
-        }
-    }
-}
-
-function clickWake() {
-    if (you.isAlive()) {
-        if (you.vitals.sleeping) {
-            you.vitals.sleeping = false;
-            document.getElementById('sleep').innerHTML = 'Sleep';
-            yourDiary.addEntry('You wake up refreshed');
-        }
-    }
-}
-
-function clickWield() {
-    weapon = this;
-    console.log(weapon);
-}
-
-function clickPiss() {
-    you.vitals.bladder = 0;
-}
-
 function clickSave() {
     var save = {
         you : you,
         yourDiary : yourDiary,
         timer : timer,
-        xpIncrement : xpIncrement
+        xpIncrement : xpIncrement,
+        yourBag : yourBag.list()
     }
     localStorage.setItem('save',JSON.stringify(save));
     console.log('game saved');
@@ -357,9 +389,15 @@ function clickSave() {
 
 function clickLoad() {
     var savegame = JSON.parse(localStorage.getItem('save'));
-    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.vitals, savegame.you.gold, savegame.you.inventory, savegame.you.skills);
-    yourBag = new Container(you.inventory);
-    xpIncrement = savegame.xpIncrement;
+    if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.vitals, savegame.you.gold, savegame.you.skills);
+    if (typeof savegame.yourBag !== 'undefined') {
+        yourBag = new Container([]);
+        var each = '';
+        for (each in savegame.yourBag) {
+            yourBag.deposit(new Weapon(each.condition, each.quality, each.material, each.kind, each.modifier));
+        }
+    }
+    if (typeof savegame.xpIncrement !== 'undefined') xpIncrement = savegame.xpIncrement;
     if (typeof savegame.yourDiary !== 'undefined') yourDiary.contents =  savegame.yourDiary.contents; //new Diary(savegame.yourDiary.contents);
     if (typeof savegame.timer !== 'undefined') timer.ticks = savegame.timer.ticks;
     if (you.vitals.drunk <= 1)
@@ -373,29 +411,36 @@ function clickLoad() {
 }
 
 function autoSave() {
-    clickSave();
-    timer.addEvent('Save', SECONDS_IN_DAY * 7, function () { autoSave(); });
+    //auto-save once a week game-time, until dead
+    if (you.isAlive()) {
+        clickSave();
+        timer.addEvent('Save', SECONDS_IN_DAY * 7, function () { autoSave(); });
+    }
 }
-var you = new Player({healthMax: 60, health: 60, bladder: 0, age: 18, caffeine: 0, drunk: 0, sleeping: false}, 0, ['rags', 'stick', 'rock'], {working: 0, xp: 0});
+
+var you = new Player({healthMax: 60, health: 60, bladder: 0, age: 18, caffeine: 0, drunk: 0, cognizance: 'awake'}, 0, {working: 0, xp: 0});
 var xpIncrement = 10;
 var yourDiary = new Diary(['You are alive. ']);
 var timer = new Timer(0, 666, []);
 
 timer.addEvent('Save', SECONDS_IN_DAY * 7, function () { autoSave(); });
-timer.addEvent('Birthday', getRandomInt(0,DAYS_IN_YEAR) * SECONDS_IN_DAY, function() { you.haveABirthday(); });
+timer.addEvent('Birthday', getRandomInt(0, DAYS_IN_YEAR) * SECONDS_IN_DAY, function() { you.haveABirthday(); });
 
-new Button('top_middle', 'quest', 'Go on a Quest', true, clickQuest);
-new Button('top_middle', 'job', 'Get a Job', true, clickJob);
-new Button('top_middle', 'sleep', 'Sleep', true, clickSleep);
-new Button('top_middle', 'drink', 'Buy beer', true, clickDrink);
-new Button('top_middle', 'coffee', 'Buy coffee', true, clickCoffee);
-new Button('top_middle', 'urinate', 'Urinate', true, clickPiss);
+var buttons = [];
+buttons.unshift(new Button('top_middle', 'quest', 'Go on a Quest', true, clickQuest, you.isAwake));
+buttons.unshift(new Button('top_middle', 'job', 'Get a Job', true, clickJob, you.isAwake));
+buttons.unshift(new Button('top_middle', 'sleep', 'Sleep', true, you.sleep, you.isAlive));
+buttons.unshift(new Button('top_middle', 'drink', 'Buy beer', true, clickDrink, you.isAwake));
+buttons.unshift(new Button('top_middle', 'coffee', 'Buy coffee', true, clickCoffee, you.isAwake));
+buttons.unshift(new Button('top_middle', 'urinate', 'Urinate', true, you.piss, you.isAlive));
+var questButton = buttons[0];
+var pissButton = buttons[5];
 
-new Button('top_left1', 'save', 'Save', true, clickSave);
-new Button('top_left1', 'load', 'Load', true, clickLoad);
-new Button('top_left2', 'speed_slow', 'Slow', true, function () { timer.speed = 1; });
-new Button('top_left2', 'speed_medium', 'Medium', true, function () { timer.speed = SECONDS_IN_MINUTE; });
-new Button('top_left2', 'speed_fast', 'Fast', true, function () { timer.speed = SECONDS_IN_HOUR; });
+buttons.unshift(new Button('top_left1', 'save', 'Save', true, clickSave, you.isAlive));
+buttons.unshift(new Button('top_left1', 'load', 'Load', true, clickLoad, function() {return true; } ));
+buttons.unshift(new Button('top_left2', 'speed_slow', 'Slow', true, function () { timer.speed = 1; }, function() {return true; } ));
+buttons.unshift(new Button('top_left2', 'speed_medium', 'Medium', true, function () { timer.speed = SECONDS_IN_MINUTE; }, function () {return true;} ));
+buttons.unshift(new Button('top_left2', 'speed_fast', 'Fast', true, function () { timer.speed = SECONDS_IN_HOUR; }, function () {return true;} ));
 
 var stats = [];
 stats.unshift(new Stat('time', '<br/>Time: ', ' on ', function() {return timer.showTime(); } ));
@@ -410,43 +455,16 @@ stats.unshift(new Stat('xp', 'XP: ', '<br/>', function() { return you.skills.xp;
 stats.unshift(new Stat('age', 'Age: ', '<br/>', function() { return you.vitals.age; }));
 stats.unshift(new Stat('weapon', 'Weapon: ', '<br/>', function() { } ));
 
-var yourBag = new Container(you.inventory);
+var yourBag = new Container([]);
 
 function tickTock(number) {
     timer.passes(number);
-    if (you.isAlive()) {
-        if (you.vitals.sleeping) {
-            you.adjHealth(8*number/(SECONDS_IN_DAY));
-        }
-        else {
-            you.adjHealth(4*number/(SECONDS_IN_DAY));
-        }
-        if (you.vitals.caffeine >= 0.1) {
-            you.vitals.caffeine = you.vitals.caffeine * Math.pow(0.5, (number/(5*SECONDS_IN_HOUR)));
-        }
-        else {
-            you.vitals.caffeine = 0;
-        }
-        if (you.skills.xp > xpIncrement) {
-            you.nextLevel();
-            xpIncrement *= 2;
-        }
-        if (you.vitals.drunk <= 1) {
-            document.getElementById('job').innerHTML = 'Day Labor';
-        }
-        if (you.vitals.drunk > 0) {
-            you.vitals.drunk -= number;
-            if (you.vitals.drunk < 0) you.vitals.drunk = 0;
-        }
-        if (you.vitals.bladder >= 100) {
-            yourDiary.addEntry('You pee your pants.');
-            you.vitals.bladder = 0;
-        }
-    }
+    you.checkSelf(number);
 
     document.getElementById('inventory').innerHTML = yourBag.show();
     document.getElementById('diary').innerHTML = yourDiary.show();
     stats.forEach(function (a) {a.update();});
+    buttons.forEach(function (a) {if (a.activeCondition()) a.activate(); else a.deactivate();})
 }
 
 window.setInterval(function () {
