@@ -256,7 +256,7 @@ function Container(contents) {
 }
 
 Container.prototype.deposit = function(item) {
-    this.contents.unshift(item);
+    this.contents.push(item);
 }
 
 Container.prototype.show = function() {
@@ -381,7 +381,7 @@ function clickSave() {
         yourDiary : yourDiary,
         timer : timer,
         xpIncrement : xpIncrement,
-        yourBag : yourBag.list()
+        yourBag : yourBag
     }
     localStorage.setItem('save',JSON.stringify(save));
     console.log('game saved');
@@ -392,9 +392,9 @@ function clickLoad() {
     if (typeof savegame.you !== 'undefined') you = new Player(savegame.you.vitals, savegame.you.gold, savegame.you.skills);
     if (typeof savegame.yourBag !== 'undefined') {
         yourBag = new Container([]);
-        var each = '';
-        for (each in savegame.yourBag) {
-            yourBag.deposit(new Weapon(each.condition, each.quality, each.material, each.kind, each.modifier));
+        for (var each in savegame.yourBag.contents) {
+            var item = savegame.yourBag.contents[each];
+            yourBag.deposit(new Weapon(item.condition, item.quality, item.material, item.kind, item.modifier));
         }
     }
     if (typeof savegame.xpIncrement !== 'undefined') xpIncrement = savegame.xpIncrement;
